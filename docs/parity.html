@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>parity</title><pre id="o">running</pre>
+<script type="module">
+import { loadWeights, CpuUNet, GpuUNet } from './unet.js';
+const o = document.getElementById('o'), log = s => { o.textContent += '\n' + s; fetch('/log', {method: 'POST', body: s}); };
+window.onerror = e => log('ERROR ' + e); window.onunhandledrejection = e => log('ERROR ' + e.reason);
+const P = await fetch('parity.json').then(r => r.json());
+const { W, nCh } = await loadWeights('.');
+const x = new Float32Array(P.x), t = new Float32Array(P.t), B = t.length;
+const err = (a, b) => { let m = 0, s = 0; for (let i = 0; i < a.length; i++) { m = Math.max(m, Math.abs(a[i] - b[i])); s += Math.abs(b[i]); } return `max abs err ${m.toExponential(2)} (mean |u| ${(s / a.length).toFixed(3)})`; };
+const cpu = new CpuUNet(W, nCh);
+let t0 = performance.now(); const uc = await cpu.forward(x, t, B);
+log(`cpu   ${err(uc, P.u)}  ${((performance.now() - t0) / B).toFixed(0)} ms/image`);
+const gpu = await GpuUNet.create(W, nCh);
+if (!gpu) log('no webgpu'); else {
+  const ug = await gpu.forward(x, t, B);
+  log(`gpu   ${err(ug, P.u)}`);
+  for (const b of [1, 9, 16]) {
+    const xb = new Float32Array(b * 3072), tb = new Float32Array(b).fill(0.5);
+    await gpu.forward(xb, tb, b); t0 = performance.now();
+    for (let i = 0; i < 10; i++) await gpu.forward(xb, tb, b);
+    log(`gpu B=${b}: ${((performance.now() - t0) / 10).toFixed(1)} ms/step`);
+  }
+}
+log('done');
+</script>

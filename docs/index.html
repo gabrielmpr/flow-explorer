@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow Explorer</title>
+<meta name="description" content="A flow matching model trained on dog photos, running in your browser. Stop it partway, re-roll the rest, and see what was already decided. Plus a 2-D flow you train by painting.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+/* Layout: a photographer's contact sheet. Frames sit on paper in rows, labeled in small mono type like film edge
+   print; the frame you pick gets a red china-marker circle. Everything else is plain type on the page. */
+:root {
+  --bg: #f2f0ea; --sheet: #fbfaf6; --ink: #1d1c19; --ink-2: #69655d; --rule: #d8d4ca;
+  --mark: #c8352b; --blue: #2c5fb5; --gold: #a06c12;
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #131210; --sheet: #1b1a17; --ink: #ebe7df; --ink-2: #a19b90; --rule: #2f2d29;
+    --mark: #ff6553; --blue: #7fa7f2; --gold: #e2b35c;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--serif); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 52px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--mark); }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+h1 { font: 800 clamp(44px, 8vw, 88px)/0.92 var(--sans); font-stretch: 78%; letter-spacing: -0.02em; margin: 0; }
+h2 { font: 700 30px/1.1 var(--sans); font-stretch: 85%; margin: 0; text-wrap: balance; }
+h3 { font: 700 19px/1.25 var(--sans); font-stretch: 90%; margin: 0 0 6px; text-wrap: balance; }
+p { margin: 0 0 12px; max-width: 66ch; }
+.mono { font-family: var(--mono); }
+.dim { color: var(--ink-2); }
+.small { font-size: 14px; line-height: 1.5; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin-bottom: 18px; }
+
+header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 40px; align-items: end; }
+header .lede { font-size: 19px; line-height: 1.55; margin: 0; }
+header nav { display: flex; gap: 6px 18px; flex-wrap: wrap; margin-top: 16px; font: 500 14px/1.4 var(--sans); }
+@media (max-width: 820px) { header { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+
+section.block { margin-top: 88px; }
+.sec-head { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 0 18px; align-items: baseline; border-top: 1.5px solid var(--ink); padding-top: 14px; margin-bottom: 22px; }
+.sec-head .n { font: 500 13px/1 var(--mono); color: var(--mark); }
+.sec-head p { margin: 10px 0 0; }
+@media (max-width: 560px) { .sec-head { grid-template-columns: minmax(0, 1fr); } .sec-head .n { margin-bottom: 8px; } }
+
+/* plain controls */
+button { font: inherit; color: inherit; }
+.btn { font: 500 14px/1 var(--sans); color: var(--ink); background: transparent; border: 1px solid var(--ink); border-radius: 0; padding: 9px 13px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
+.btn.primary { background: var(--ink); color: var(--bg); }
+.btn.primary:hover:not(:disabled) { background: var(--mark); border-color: var(--mark); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.seg { display: inline-flex; gap: 12px; align-items: baseline; font: 14px/1.3 var(--sans); flex-wrap: wrap; }
+.seg .lab { color: var(--ink-2); }
+.seg button { background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--ink-2); border-bottom: 2px solid transparent; font: 500 14px/1.3 var(--sans); }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--mark); }
+.check { display: inline-flex; gap: 6px; align-items: center; font: 14px/1.3 var(--sans); color: var(--ink-2); cursor: pointer; }
+.check input { accent-color: var(--mark); margin: 0; }
+input[type=range] { accent-color: var(--mark); }
+.row { display: flex; gap: 12px 26px; align-items: center; flex-wrap: wrap; }
+.slider { display: flex; gap: 12px; align-items: center; font: 13px/1 var(--mono); color: var(--ink-2); }
+.slider input { flex: 1; min-width: 120px; }
+
+/* ---------- the live dog ---------- */
+.desk { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 32px; align-items: start; }
+@media (max-width: 900px) { .desk { grid-template-columns: minmax(0, 1fr); } }
+.stage { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.plate canvas { display: block; width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: var(--sheet); border: 1px solid var(--rule); }
+.plate .cap { font: 12px/1.45 var(--mono); color: var(--ink-2); margin-top: 7px; }
+.plate .cap b { color: var(--ink); font-weight: 500; }
+.ctrl { margin-top: 18px; display: grid; gap: 14px; }
+.tline { display: grid; grid-template-columns: auto minmax(0, 1fr) 54px; gap: 12px; align-items: center; font: 13px/1 var(--mono); color: var(--ink-2); }
+.tline output { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.tline input { width: 100%; }
+
+.strip { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 10px; margin-top: 26px; padding: 14px 12px 10px; background: var(--sheet); border: 1px solid var(--rule); }
+.cell { position: relative; cursor: pointer; }
+.cell canvas { display: block; width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: var(--bg); }
+.cell span { display: block; font: 10.5px/1 var(--mono); color: var(--ink-2); margin-top: 6px; text-align: center; }
+.cell.sel::after { content: ""; position: absolute; inset: -7px -6px 10px -7px; border: 2px solid var(--mark); border-radius: 48% 52% 46% 54% / 55% 47% 53% 45%; transform: rotate(-4deg); pointer-events: none; }
+@media (max-width: 640px) { .strip { grid-template-columns: repeat(6, minmax(0, 1fr)); } .cell:nth-child(even) { display: none; } }
+
+.reroll { margin-top: 34px; display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 700px) { .reroll { grid-template-columns: minmax(0, 1fr); } }
+.sheet9 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: #121110; }
+.sheet9 canvas { display: block; width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: #222; }
+
+.notes { font-size: 15px; line-height: 1.5; }
+.notes section + section { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--rule); }
+.notes h3 { font-size: 15px; }
+.nnrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 8px; }
+.nn canvas { display: block; width: 100%; aspect-ratio: 1; image-rendering: pixelated; background: var(--sheet); border: 1px solid var(--rule); }
+.nn .d { font: 11px/1 var(--mono); color: var(--ink-2); margin-top: 5px; display: block; }
+#d-engine { font: 12px/1.45 var(--mono); color: var(--ink-2); }
+
+/* ---------- findings ---------- */
+.finding { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px 40px; padding: 28px 0; border-top: 1px solid var(--rule); align-items: start; }
+.finding:first-of-type { border-top: 0; padding-top: 4px; }
+@media (max-width: 860px) { .finding { grid-template-columns: minmax(0, 1fr); } }
+.finding .num { font: 500 12px/1 var(--mono); color: var(--mark); display: block; margin-bottom: 10px; }
+.chart { display: block; width: 100%; height: 280px; }
+figure { margin: 0; }
+figure + figure { margin-top: 22px; }
+figure img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+figcaption { font: 13.5px/1.5 var(--serif); color: var(--ink-2); margin-top: 8px; }
+figcaption b { color: var(--ink); font-weight: 600; }
+.axis-labels { display: flex; justify-content: space-between; font: 10.5px/1 var(--mono); color: var(--ink-2); margin-top: 6px; }
+
+/* ---------- 2-D playground ---------- */
+.play { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 32px; align-items: start; }
+@media (max-width: 900px) { .play { grid-template-columns: minmax(0, 1fr); } }
+#p2-canvas { display: block; width: 100%; aspect-ratio: 1; background: var(--sheet); border: 1px solid var(--rule); cursor: crosshair; touch-action: none; }
+.panel { display: grid; gap: 18px; font: 14px/1.45 var(--sans); }
+.panel .grp { display: grid; gap: 8px; }
+.panel .lab { font: 500 11px/1 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-2); }
+.linkrow { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.linkbtn { background: none; border: 0; padding: 0; cursor: pointer; font: 14px/1.5 var(--sans); color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.linkbtn:hover { text-decoration-color: var(--mark); }
+#p2-loss { display: block; width: 100%; height: 120px; }
+#p2-status { font: 12px/1.45 var(--mono); color: var(--ink-2); min-height: 2.9em; }
+.key { display: inline-block; width: 9px; height: 9px; vertical-align: 0; margin-right: 5px; }
+.snaps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+@media (max-width: 640px) { .snaps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.snap canvas { display: block; width: 100%; aspect-ratio: 1; background: var(--sheet); border: 1px solid var(--rule); }
+.snap span { display: block; font: 11px/1 var(--mono); color: var(--ink-2); margin-top: 6px; }
+
+/* ---------- notes ---------- */
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; }
+@media (max-width: 820px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+.cols h3 { margin-top: 22px; }
+.eq { font: 15px/1.6 var(--mono); background: var(--sheet); border-left: 2px solid var(--mark); padding: 8px 14px; margin: 4px 0 14px; overflow-x: auto; white-space: nowrap; }
+ul.refs { padding-left: 18px; margin: 0; font-size: 15px; line-height: 1.5; }
+ul.refs li { margin-bottom: 9px; max-width: 70ch; }
+pre { font: 13px/1.6 var(--mono); background: var(--sheet); border: 1px solid var(--rule); padding: 14px 16px; overflow-x: auto; margin: 0 0 14px; }
+code { font: 0.88em var(--mono); }
+footer { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--rule); font: 13px/1.5 var(--mono); color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <div class="eyebrow">MIT 6.S184, lab 2, taken further</div>
+    <h1>Flow<br>Explorer</h1>
+  </div>
+  <div>
+    <p class="lede">A 3.9M-parameter flow matching model, trained from scratch on 4,265 dog photos at 32×32 pixels, running in this page. It starts from Gaussian noise and follows a learned velocity field in small steps until it lands on a dog. Stop it at any step and re-roll the rest to see how much of the dog was already decided.</p>
+    <nav><a href="#develop">The model</a><a href="#findings">Findings</a><a href="#paint">Paint a distribution</a><a href="#how">How it works</a><a href="https://github.com/gabrielmpr/flow-explorer">Code on GitHub</a></nav>
+  </div>
+</header>
+
+<!-- ======================= live dog ======================= -->
+<section class="block" id="develop">
+  <div class="sec-head"><span class="n">01</span><div><h2>Noise to dog</h2>
+    <p>The left image is the sample at time <i>t</i>. At <i>t</i> = 0 it is pure noise and at <i>t</i> = 1 it is the finished dog. The right image is the model's guess, at that moment, of where the sample will end up. Drag the slider or click a frame to go back to any step.</p></div></div>
+
+  <div class="desk">
+    <div>
+      <div class="stage">
+        <div class="plate"><canvas id="d-xt" width="32" height="32" aria-label="The sample at time t"></canvas>
+          <div class="cap"><b>x<sub>t</sub></b>, the sample at time t</div></div>
+        <div class="plate"><canvas id="d-guess" width="32" height="32" aria-label="The model's guess of the final image"></canvas>
+          <div class="cap"><b>x<sub>t</sub> + (1 − t)·u</b>, where it is heading</div></div>
+      </div>
+      <div class="ctrl">
+        <div class="tline"><span>t</span><input id="d-t" type="range" min="0" max="50" step="1" value="0" aria-label="Step"><output id="d-tval">0.00</output></div>
+        <div class="row">
+          <button class="btn primary" id="d-new">New noise</button>
+          <button class="btn" id="d-again">Run again</button>
+          <span class="mono small dim" id="d-seed"></span>
+        </div>
+        <div class="row">
+          <div class="seg" role="group" aria-label="Euler steps"><span class="lab">Steps</span>
+            <button data-steps="1">1</button><button data-steps="5">5</button><button data-steps="10">10</button><button data-steps="25">25</button><button data-steps="50">50</button><button data-steps="100">100</button></div>
+          <label class="slider">noise σ <input id="d-sigma" type="range" min="0" max="2" step="0.1" value="0" style="width:120px"><output id="d-sigval">0 (ODE)</output></label>
+        </div>
+      </div>
+    </div>
+
+    <aside class="notes">
+      <section>
+        <h3>Closest training photos</h3>
+        <div class="nnrow" id="d-nn">
+          <div class="nn"><canvas width="32" height="32"></canvas><span class="d">·</span></div>
+          <div class="nn"><canvas width="32" height="32"></canvas><span class="d">·</span></div>
+          <div class="nn"><canvas width="32" height="32"></canvas><span class="d">·</span></div>
+        </div>
+        <p class="small dim">Searched over all 4,265 training photos and their mirror images. The number is the root-mean-square pixel difference, with pixels scaled to [−1, 1]. A real photo the model never saw sits a median <span data-v="nearest.median_held_out">0.39</span> from its closest training photo.</p>
+      </section>
+      <section>
+        <h3>Settings</h3>
+        <p class="small dim"><b>Steps</b> is how many Euler steps the run takes from noise to image. One step outputs the guess made at <i>t</i> = 0, which is the average dog. <b>Noise σ</b> above 0 adds fresh noise on every step (an SDE). The noise is scaled so the result is still a sample from the same distribution.</p>
+      </section>
+      <section><p id="d-engine"></p></section>
+    </aside>
+  </div>
+
+  <div class="strip" id="d-strip" aria-label="Frames at t = 0, 0.1, ..., 1">
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.0</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.1</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.2</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.3</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.4</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.5</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.6</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.7</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.8</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>0.9</span></div>
+    <div class="cell"><canvas width="32" height="32"></canvas><span>1.0</span></div>
+  </div>
+
+  <div class="reroll">
+    <div class="sheet9" id="d-sheet">
+      <canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas>
+      <canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas>
+      <canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas><canvas width="32" height="32"></canvas>
+    </div>
+    <div>
+      <h3>Re-roll the rest</h3>
+      <p>Take the sample at the selected frame and finish it nine times, each time with different random noise. What the nine results share was already fixed at that frame. What differs was still open.</p>
+      <p>Re-roll from <i>t</i> = 0 and the nine dogs differ in color, breed and pose. From 0.4 it is the same dog every time, with small changes to the ears and markings. Past 0.6 the nine are hard to tell apart.</p>
+      <p class="row" style="margin-top:16px"><button class="btn primary" id="d-reroll">Re-roll from t = 0.40</button></p>
+      <p class="small dim" id="d-sheet-cap"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= findings ======================= -->
+<section class="block" id="findings">
+  <div class="sec-head"><span class="n">02</span><div><h2>Findings</h2>
+    <p>Measured on the trained model in PyTorch. The numbers and images come from <a href="https://github.com/gabrielmpr/flow-explorer/blob/main/analyze.py"><code>analyze.py</code></a>.</p></div></div>
+
+  <div class="finding">
+    <div>
+      <span class="num">FINDING 1</span>
+      <h3>Color is decided first, then layout, then fur</h3>
+      <p>Stop a run at time <i>t</i>, finish it 8 times with fresh noise, and measure how much the 8 results still differ. Splitting each image into three spatial scales shows which parts were already fixed. The overall color and lighting (the image averaged over 8×8-pixel blocks) is half decided by <i>t</i> = 0.13. The layout, meaning where the head, ears and background sit, is half decided by 0.26. Fur and edges, the finest scale, not until 0.48. At <i>t</i> = 0.4, when the sample still looks mostly like noise, 12% of the color variation is left and 58% of the fine detail.</p>
+    </div>
+    <div>
+      <figure><canvas class="chart" id="c-commit" aria-label="Share of variation left among re-rolls, by spatial scale, against the time the re-roll starts"></canvas>
+        <figcaption><b>Variation left among re-rolls</b>, as a share of the variation among re-rolls started at <i>t</i> = 0, for each spatial scale. Dashed lines mark where each one crosses 50%. 48 runs, 8 re-rolls each.</figcaption></figure>
+      <figure><img src="img/rerolls.png" alt="Re-rolls of one sample, started at t = 0, 0.2, 0.4, 0.6 and 0.8" loading="lazy">
+        <figcaption><b>One sample, re-rolled.</b> Rows restart the same run at <i>t</i> = 0, 0.2, 0.4, 0.6 and 0.8, and finish it 8 times with fresh noise.</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div>
+      <span class="num">FINDING 2</span>
+      <h3>At t = 0 the model's guess is the average dog</h3>
+      <p>At <i>t</i> = 0 the sample is pure noise and carries no information about which photo it will become, so the best guess is the average of all of them. Over 256 noise images, the model's guess is 0.046 rms from the mean training photo. A typical training photo is 0.49 from that mean, ten times farther. This is why one Euler step gives a brown blur: one step jumps straight to the <i>t</i> = 0 guess. By <i>t</i> = 0.3 the guess already has one particular dog's face and background.</p>
+    </div>
+    <div>
+      <figure><img src="img/guesses.png" alt="The model's guess of the final image at t = 0, 0.1, up to 0.9, and the final image, for four runs" loading="lazy">
+        <div class="axis-labels"><span>t = 0</span><span>0.5</span><span>0.9</span><span>final</span></div>
+        <figcaption><b>The guess sharpens.</b> Each row is one run. The first ten columns show the model's guess of the final image at <i>t</i> = 0, 0.1, …, 0.9, and the last column is the image the run actually ends on.</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div>
+      <span class="num">FINDING 3</span>
+      <h3>It doesn't copy its training photos</h3>
+      <p>For 1,000 generated dogs I searched all 4,265 training photos and their mirror images for the closest one. I did the same for the 500 dog photos in AFHQ's validation set, which the model never saw. A model that copied would put its samples much closer to a training photo than new real photos are. Here the median distance is 0.38 for generated dogs and 0.39 for held-out photos. The closest of the 1,000 generated dogs is 0.25 from its nearest training photo, and 15 of the 500 held-out photos are closer than that.</p>
+    </div>
+    <div>
+      <figure><canvas class="chart" id="c-nearest" aria-label="Histogram of nearest-training-photo distances for generated images and for held-out photos"></canvas>
+        <figcaption><b>Distance to the nearest training photo.</b> Gray: 500 held-out photos. Red: 1,000 generated dogs.</figcaption></figure>
+      <figure><img src="img/nearest.png" alt="Four generated dogs, each followed by its three closest training photos" loading="lazy">
+        <figcaption><b>Generated dog, then its three closest training photos.</b> Rows are the closest match out of 1,000 samples, then the 25th percentile, the median and the farthest.</figcaption></figure>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div>
+      <span class="num">FINDING 4</span>
+      <h3>Ten steps get most of the way</h3>
+      <p>The paths from noise to dog are close to straight. For a 500-step run, the straight-line distance from start to end is 97.6% of the length of the path it actually travels, and 96.0% for the least straight of 256 runs. A straight path is what lets a few large steps land in the right place. With 10 steps the result is 0.14 rms from the 500-step image, while two unrelated generated dogs are 0.67 apart. Below 5 steps the images blur toward the average dog. At 50 steps the difference is 0.03, too small to see.</p>
+    </div>
+    <div>
+      <figure><canvas class="chart" id="c-steps" aria-label="Distance from the 500-step image against the number of Euler steps"></canvas>
+        <figcaption><b>Distance from the 500-step image</b>, rms over 256 starting noises. The dashed line is the average distance between two independently generated dogs.</figcaption></figure>
+      <figure><img src="img/steps.png" alt="The same starting noise sampled with 1, 2, 3, 5, 10, 20, 50, 100, 200 and 500 Euler steps" loading="lazy">
+        <div class="axis-labels"><span>1 step</span><span>10</span><span>500</span></div>
+        <figcaption><b>Same noise, more steps.</b> Columns use 1, 2, 3, 5, 10, 20, 50, 100, 200 and 500 Euler steps.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 2-D playground ======================= -->
+<section class="block" id="paint">
+  <div class="sec-head"><span class="n">03</span><div><h2>Paint a distribution</h2>
+    <p>The dog model took hours to train. The same method in two dimensions takes seconds, so it can train while you watch. Paint points on the square, or pick a shape. A small network (three layers of 64) learns to carry Gaussian noise onto your points with the same loss as the dog model, in a background thread in this page.</p></div></div>
+
+  <div class="play" id="play">
+    <div>
+      <canvas id="p2-canvas" aria-label="Paint here. Particles flow from noise to the painted points."></canvas>
+      <div class="ctrl">
+        <div class="tline"><span>t</span><input id="p2-t" type="range" min="0" max="1" step="0.01" value="0" aria-label="Time"><output id="p2-tval">0.00</output></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="grp"><span class="lab">Brush paints</span>
+        <div class="seg" role="group"><button data-mode="data" aria-pressed="true">data (where to go)</button><button data-mode="init" aria-pressed="false">noise (where to start)</button></div></div>
+      <div class="grp"><span class="lab">Shapes</span>
+        <div class="linkrow"><button class="linkbtn" data-preset="spiral">spiral</button><button class="linkbtn" data-preset="moons">two moons</button><button class="linkbtn" data-preset="rings">rings</button><button class="linkbtn" data-preset="checkers">checkerboard</button><button class="linkbtn" data-preset="face">face</button></div></div>
+      <div class="grp"><span class="lab">Reset</span>
+        <div class="linkrow"><button class="linkbtn" id="p2-clear">clear what the brush paints</button><button class="linkbtn" id="p2-gauss">start from Gaussian noise</button><button class="linkbtn" id="p2-retrain">train again from scratch</button></div></div>
+      <div class="grp"><span class="lab">Show</span>
+        <div class="row" style="gap:8px 18px"><label class="check"><input type="checkbox" id="p2-field" checked> velocity field at t</label><label class="check"><input type="checkbox" id="p2-paths"> paths</label><button class="btn" id="p2-play" style="padding:6px 10px">Pause</button></div></div>
+      <div class="grp"><span class="lab">Training loss</span><canvas id="p2-loss"></canvas><div id="p2-status"></div></div>
+      <p class="small dim" style="margin:0"><span class="key" style="background:var(--mark)"></span>started left of center <span class="key" style="background:var(--blue);margin-left:10px"></span>started right. Gray dots are your data. The loss can't reach zero: its floor is the part of <span class="mono">z − x₀</span> that can't be predicted from <span class="mono">x<sub>t</sub></span>.</p>
+    </div>
+  </div>
+  <div class="snaps">
+    <div class="snap"><canvas></canvas><span>step 0</span></div>
+    <div class="snap"><canvas></canvas><span>50</span></div>
+    <div class="snap"><canvas></canvas><span>200</span></div>
+    <div class="snap"><canvas></canvas><span>500</span></div>
+    <div class="snap"><canvas></canvas><span>1,000</span></div>
+    <div class="snap"><canvas></canvas><span>2,000</span></div>
+  </div>
+  <p class="small dim" style="margin-top:10px">Where the same 900 noise points end up, using the network as it was after that many training steps. Before training, the field is close to zero and nothing moves.</p>
+</section>
+
+<!-- ======================= how it works ======================= -->
+<section class="block" id="how">
+  <div class="sec-head"><span class="n">04</span><div><h2>How it works</h2></div></div>
+  <div class="cols">
+    <div>
+      <h3>Training</h3>
+      <p>Take a photo <i>z</i> and a noise image <i>ε</i> of the same size, and blend them with a random weight <i>t</i> between 0 and 1:</p>
+      <div class="eq">x<sub>t</sub> = t·z + (1 − t)·ε</div>
+      <p>The network <i>u</i><sub>θ</sub>(<i>x<sub>t</sub></i>, <i>t</i>) sees only the blend and the time, and is trained to output the direction from the noise to the photo, <i>z</i> − <i>ε</i>, with a squared-error loss. A given blend could have come from many different photos, so the best it can do is the average direction over all of them, weighted by how likely each one is. That average is a velocity field that carries the whole noise distribution onto the photo distribution (Lipman et al. 2023).</p>
+      <p>The network is the lab's U-Net widened to 64 base channels: three resolution levels (32, 16, 8, then 4×4 at the bottom), one residual block per level, GroupNorm, and a sinusoidal time embedding added to every block. 3.9M parameters. Trained for 30,000 steps at batch size 64 with AdamW (learning rate 3·10⁻⁴), horizontal flips, and an exponential moving average of the weights (0.999), on an M2 MacBook in about two hours. Final loss 0.205 on training photos and 0.219 on held-out ones.</p>
+      <canvas class="chart" id="c-train" style="height:180px" aria-label="Training and held-out loss over training"></canvas>
+      <h3>Sampling</h3>
+      <p>Start from noise <i>x</i><sub>0</sub> and take Euler steps, <i>x</i> ← <i>x</i> + <i>h</i>·<i>u</i><sub>θ</sub>(<i>x</i>, <i>t</i>). With noise σ above 0 the page uses an SDE instead. It adds Gaussian noise each step and a correction term that keeps the distribution at every <i>t</i> the same as the ODE's. The correction needs the score ∇log <i>p<sub>t</sub></i>, and for this path the score follows from the velocity, so no second network is needed:</p>
+      <div class="eq">score(x, t) = (t·u − x) / (1 − t)</div>
+      <p>The noise level is σ<sub>t</sub> = σ·√(1 − t). It fades out by the end, and it cancels the 1/(1 − t) above, so the drift becomes <i>u</i> + σ²/2·(<i>t</i>·<i>u</i> − <i>x</i>).</p>
+      <h3>The guess of the final image</h3>
+      <p>The velocity is the average of <i>z</i> − <i>ε</i> given the blend. Following it in a straight line for the remaining time 1 − <i>t</i> gives <i>x<sub>t</sub></i> + (1 − <i>t</i>)·<i>u</i>, which works out to the average of <i>z</i> given the blend: the model's best guess of the final photo. The right-hand image in section 01 shows it.</p>
+    </div>
+    <div>
+      <h3>In the browser</h3>
+      <p>The U-Net runs as hand-written WebGPU compute shaders: one for 3×3 convolutions, one for 1×1, one for GroupNorm with SiLU, one each for pooling and upsample-and-concatenate. Each thread computes 4 pixels for 8 output channels and reuses its input loads across them. Weights ship as 7.7 MB of fp16. Outputs match PyTorch to within 10⁻⁵. One step for one image takes about 15 ms on an M2, and a step for the nine re-rolls about 50 ms. Without WebGPU, a plain JavaScript version of the same network runs instead, much more slowly.</p>
+      <p>The 2-D network is a 3-layer MLP with hand-written backpropagation and Adam, trained in a Web Worker on batches of 128.</p>
+      <h3>How the findings were measured</h3>
+      <p><b>Finding 1.</b> 48 ODE runs of 100 Euler steps. At <i>t</i> = 0, 0.1, …, 0.9 each run is copied 8 times and finished with the SDE at σ = 1. Each final image is split into three parts that add up to it: the 8×8 block average (color), the 2×2 block average minus the 8×8 one (layout), and the image minus the 2×2 average (detail). For each part: the variance across the 8 copies, averaged over pixels and runs, divided by its value for copies started at <i>t</i> = 0. That baseline is smaller than the variance between independent samples. At σ = 1, copies started from the same noise keep some of it in common and vary 31% as much as independent samples (20% for color).</p>
+      <p><b>Finding 2.</b> The guess at <i>t</i> = 0 for 256 noise images, compared with the mean of the training photos.</p>
+      <p><b>Finding 3.</b> 1,000 samples from 100-step ODE runs and the 500 dog photos in AFHQ's validation split, each compared with the 4,265 training photos plus mirrored copies, since training used random flips. Distance is the rms pixel difference with pixels in [−1, 1].</p>
+      <p><b>Finding 4.</b> 256 starting noises, each sampled with <i>N</i> Euler steps and compared with a 500-step run from the same noise. Straightness is the distance from <i>x</i><sub>0</sub> to <i>x</i><sub>1</sub> divided by the summed length of the 500 steps.</p>
+      <h3>Run it</h3>
+<pre>pip install torch pillow numpy
+# AFHQ (Choi et al. 2020): put afhq/train/dog and afhq/val/dog here
+python train.py --iters 30000   # ~2 h on an M2, writes ckpt.pt
+python analyze.py               # ~10 min, writes docs/data.json and docs/img/
+python export_weights.py        # writes docs/model.bin for the page
+cd docs && python -m http.server</pre>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px">Related work</h3>
+  <ul class="refs">
+    <li>Lipman et al. 2023, <a href="https://arxiv.org/abs/2210.02747"><i>Flow Matching for Generative Modeling</i></a>, and Liu, Gong &amp; Liu 2023, <a href="https://arxiv.org/abs/2209.03003"><i>Flow Straight and Fast</i></a> (rectified flow): the training objective and the straight-line path used here.</li>
+    <li>Albergo, Boffi &amp; Vanden-Eijnden 2023, <a href="https://arxiv.org/abs/2303.08797"><i>Stochastic Interpolants</i></a>, and Song et al. 2021, <a href="https://arxiv.org/abs/2011.13456"><i>Score-Based Generative Modeling through SDEs</i></a>: SDEs with the same marginals as the ODE, and converting between velocity and score.</li>
+    <li>Ho, Jain &amp; Abbeel 2020, <a href="https://arxiv.org/abs/2006.11239"><i>Denoising Diffusion Probabilistic Models</i></a>, section 4.3: the same re-roll experiment on a diffusion model on CelebA-HQ, where samples sharing a late <i>x<sub>t</sub></i> share coarse attributes. Finding 1 measures it by spatial scale.</li>
+    <li>Dieleman 2024, <a href="https://sander.ai/2024/09/02/spectral-autoregression.html"><i>Diffusion is spectral autoregression</i></a>: why coarse-to-fine happens. Natural images have most of their power at low frequencies, so added noise drowns fine detail first, and removing noise uncovers it last.</li>
+    <li>Carlini et al. 2023, <a href="https://arxiv.org/abs/2301.13188"><i>Extracting Training Data from Diffusion Models</i></a>, and Somepalli et al. 2023, <a href="https://arxiv.org/abs/2212.03860"><i>Diffusion Art or Digital Forgery?</i></a>: memorization in large diffusion models, measured with nearest-neighbor search like Finding 3.</li>
+    <li>Holderrieth &amp; Erives, <a href="https://diffusion.csail.mit.edu/">MIT 6.S184: Generative AI with Stochastic Differential Equations</a>: the course, and lab 2's U-Net and training setup.</li>
+    <li>Choi et al. 2020, <a href="https://arxiv.org/abs/1912.01865"><i>StarGAN v2</i></a>: the AFHQ dataset.</li>
+  </ul>
+</section>
+
+<footer>Gabriel Aguilar Pérez · <a href="https://github.com/gabrielmpr/flow-explorer">github.com/gabrielmpr/flow-explorer</a> · also: <a href="https://gabrielmpr.github.io/attention-explorer/">Attention Explorer</a></footer>
+</div>
+
+<script type="module">
+import { initCharts } from './charts.js';
+import { initDogs } from './dogs.js';
+import { initPlayground } from './play2d.js';
+const data = await initCharts().catch(e => { console.warn(e); return null; });
+if (data) document.querySelectorAll('[data-v]').forEach(el => {
+  const v = el.dataset.v.split('.').reduce((o, k) => o?.[k], data);
+  if (typeof v === 'number') el.textContent = v.toFixed(2);
+});
+initPlayground(document.getElementById('play').parentElement);
+initDogs(document.getElementById('develop'), data).catch(e => {
+  console.error(e);
+  document.getElementById('d-engine').textContent = 'The model failed to load: ' + e.message;
+});
+</script>
+</body>
+</html>

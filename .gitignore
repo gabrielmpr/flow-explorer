@@ -1,0 +1,5 @@
+afhq
+__pycache__/
+train.out
+.DS_Store
+analyze.out
