@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flow Explorer</title>
+<title>Noise to Dog</title>
 <meta name="description" content="A flow matching model trained on dog photos, running in your browser. Stop it partway, re-roll the rest, and see what was already decided. Plus a 2-D flow you train by painting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,7 +152,7 @@ footer { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--rule);
 
 <header>
   <div>
-    <h1>Flow<br>Explorer</h1>
+    <h1>Noise<br>to Dog</h1>
   </div>
   <div>
     <p class="lede">A 3.9M-parameter flow matching model, trained from scratch on 4,265 dog photos at 32×32 pixels, running in this page. It starts from Gaussian noise and follows a learned velocity field in small steps until it lands on a dog. Stop it at any step and re-roll the rest to see how much of the dog was already decided.</p>
@@ -162,7 +162,7 @@ footer { margin-top: 72px; padding-top: 16px; border-top: 1px solid var(--rule);
 
 <!-- ======================= live dog ======================= -->
 <section class="block" id="develop">
-  <div class="sec-head"><span class="n">01</span><div><h2>Noise to dog</h2>
+  <div class="sec-head"><span class="n">01</span><div><h2>Watch it sample</h2>
     <p>The left image is the sample at time <i>t</i>. At <i>t</i> = 0 it is pure noise and at <i>t</i> = 1 it is the finished dog. The right image is the model's guess, at that moment, of where the sample will end up. Drag the slider or click a frame to go back to any step.</p></div></div>
 
   <div class="desk">

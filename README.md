@@ -1,4 +1,4 @@
-# Flow Explorer
+# Noise to Dog
 
 A 3.9M-parameter flow matching model trained from scratch on 4,265 dog photos (AFHQ, 32×32), running in the browser on hand-written WebGPU shaders. Watch noise turn into a dog, stop at any step, and re-roll the rest to see how much of the dog was already decided.
 
