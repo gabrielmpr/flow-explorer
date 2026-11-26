@@ -2,7 +2,7 @@
 
 A 3.9M-parameter flow matching model trained from scratch on 4,265 dog photos (AFHQ, 32×32), running in the browser on hand-written WebGPU shaders. Watch noise turn into a dog, stop at any step, and re-roll the rest to see how much of the dog was already decided.
 
-**[Live demo →](https://gabrielmpr.github.io/flow-explorer/)** The page also has a 2-D version of the same method that trains in a few seconds while you watch: paint a distribution and see the velocity field learn to carry Gaussian noise onto it.
+**[Live demo →](https://gabrielmpr.github.io/noise-to-dog/)** The page also has a 2-D version of the same method that trains in a few seconds while you watch: paint a distribution and see the velocity field learn to carry Gaussian noise onto it.
 
 The model is the U-Net from lab 2 of MIT 6.S184 (*Generative AI with Stochastic Differential Equations*), widened to 64 base channels and trained for 30,000 steps on an M2 MacBook (about two hours) to a held-out loss of 0.219. Everything below was measured on that trained model.
 
